@@ -272,7 +272,7 @@
     color:var(--rose-deep);
     margin-bottom:6px;
   }
-  input[type="date"], input[type="time"]{
+  input[type="date"], input[type="time"], textarea{
     width:100%;
     padding:10px 12px;
     border:1.5px solid var(--rose-deep);
@@ -281,6 +281,11 @@
     font-family:'Poppins',sans-serif;
     font-size:14px;
     color:var(--ink);
+  }
+  textarea{
+    resize:vertical;
+    min-height:64px;
+    font-size:13.5px;
   }
   .row-2{ display:flex; gap:10px; }
   .row-2 .field-group{ flex:1; }
@@ -457,6 +462,12 @@
       <button class="opt" onclick="pick(this,'surprise')">Surprise me</button>
     </div>
     <p class="note" id="activity-preview" style="min-height:20px;font-style:italic;font-size:13px;"></p>
+
+    <div class="field-group">
+      <label for="herMessage">A message for <span id="sender-slot-2"></span> (optional)</label>
+      <textarea id="herMessage" placeholder="Say something back..."></textarea>
+    </div>
+
     <button class="lock-btn" id="lockBtn" disabled onclick="lockIn()">Lock it in</button>
   </div>
 
@@ -514,6 +525,7 @@
   document.getElementById('final-message').textContent = `"${CLOSING_MESSAGE}"`;
   document.getElementById('from-line').textContent = `— ${SENDER}`;
   document.getElementById('sender-slot').textContent = SENDER;
+  document.getElementById('sender-slot-2').textContent = SENDER;
 
   if(PHOTO_URL){
     ['photoFrameYay','photoFrameFinal'].forEach(id=>{
@@ -633,9 +645,11 @@
 
     startCountdown(dateObj);
 
+    const herMessage = document.getElementById('herMessage').value.trim();
+
     autoSendReply({
       activity: ACTIVITIES[chosenKey].label,
-      prettyDate, prettyTime
+      prettyDate, prettyTime, herMessage
     });
   }
 
@@ -646,7 +660,7 @@
   ============================================================= */
   const ERICK_EMAIL = "erickdeogratiusmoshi@gmail.com";
 
-  function autoSendReply({ activity, prettyDate, prettyTime }){
+  function autoSendReply({ activity, prettyDate, prettyTime, herMessage }){
     fetch(`https://formsubmit.co/ajax/${ERICK_EMAIL}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -657,7 +671,8 @@
         activity: activity,
         date: prettyDate,
         time: prettyTime,
-        message: `${RECIPIENT} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.`
+        her_message: herMessage || "(no message left)",
+        message: `${RECIPIENT} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.\n\nHer message: ${herMessage || "(none)"}`
       })
     }).then(()=>{
       const hint = document.getElementById('replyHint');
@@ -668,7 +683,7 @@
       const btn = document.getElementById('replyBtn');
       if(btn){
         btn.style.display = 'block';
-        window._replyData = { activity, prettyDate, prettyTime };
+        window._replyData = { activity, prettyDate, prettyTime, herMessage };
       }
     });
   }
@@ -676,9 +691,9 @@
   function sendReply(){
     // Manual fallback only — used if the automatic send above fails
     if(!window._replyData) return;
-    const { activity, prettyDate, prettyTime } = window._replyData;
+    const { activity, prettyDate, prettyTime, herMessage } = window._replyData;
     const subject = `Yes! ${RECIPIENT} said yes 💌`;
-    const body = `${RECIPIENT} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}`;
+    const body = `${RECIPIENT} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}\n\nHer message: ${herMessage || "(none)"}`;
     window.location.href = `mailto:${ERICK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
