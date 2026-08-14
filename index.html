@@ -523,9 +523,8 @@
   }
 
   // Reply button only makes sense if a contact was provided
-  if(!CONTACT){
-    document.getElementById('replyBtn').style.display = 'none';
-  }
+  // Reply is now automatic (see autoSendReply) — this button only appears as a fallback if that fails
+  document.getElementById('replyBtn').style.display = 'none';
 
   if(SONG_URL){
     document.getElementById('songPlayer').src = SONG_URL;
@@ -548,6 +547,7 @@
     if(env.classList.contains('open')) return;
     ensureAudio();
     sfxSeal();
+    startMusic();
     env.classList.add('open');
     document.querySelector('.tap-hint').style.opacity = '0';
     setTimeout(()=>{
@@ -633,26 +633,53 @@
 
     startCountdown(dateObj);
 
-    window._replyData = {
+    autoSendReply({
       activity: ACTIVITIES[chosenKey].label,
       prettyDate, prettyTime
-    };
+    });
+  }
+
+  /* ============================================================
+     AUTOMATIC REPLY — sent silently the moment she locks in her
+     answer, straight to Erick's inbox. No action needed from her.
+     Powered by FormSubmit.co (free, no account needed on their side).
+  ============================================================= */
+  const ERICK_EMAIL = "erickdeogratiusmoshi@gmail.com";
+
+  function autoSendReply({ activity, prettyDate, prettyTime }){
+    fetch(`https://formsubmit.co/ajax/${ERICK_EMAIL}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        _subject: `💌 ${RECIPIENT} said YES!`,
+        name: RECIPIENT,
+        answer: "YES",
+        activity: activity,
+        date: prettyDate,
+        time: prettyTime,
+        message: `${RECIPIENT} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.`
+      })
+    }).then(()=>{
+      const hint = document.getElementById('replyHint');
+      if(hint) hint.textContent = `Sent to ${SENDER} ✓`;
+    }).catch(()=>{
+      const hint = document.getElementById('replyHint');
+      if(hint) hint.textContent = `Couldn't auto-send — tap below to send manually.`;
+      const btn = document.getElementById('replyBtn');
+      if(btn){
+        btn.style.display = 'block';
+        window._replyData = { activity, prettyDate, prettyTime };
+      }
+    });
   }
 
   function sendReply(){
-    if(!CONTACT || !window._replyData) return;
+    // Manual fallback only — used if the automatic send above fails
+    if(!window._replyData) return;
     const { activity, prettyDate, prettyTime } = window._replyData;
     const subject = `Yes! ${RECIPIENT} said yes 💌`;
     const body = `${RECIPIENT} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}`;
-
-    let url;
-    if(CONTACT.includes('@')){
-      url = `mailto:${CONTACT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    }else{
-      url = `sms:${CONTACT}?body=${encodeURIComponent(subject + ' — ' + body)}`;
-    }
-    window.location.href = url;
-    document.getElementById('replyHint').textContent = `Opening your ${CONTACT.includes('@') ? 'email' : 'messages'} app to send this to ${SENDER}...`;
+    window.location.href = `mailto:${ERICK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
   /* ---------- countdown ---------- */
@@ -717,12 +744,28 @@
     musicLoopId = setTimeout(scheduleMusicStep, 700);
   }
 
+  function startMusic(){
+    const btn = document.getElementById('soundToggle');
+    const songEl = document.getElementById('songPlayer');
+
+    if(SONG_URL){
+      songEl.play().catch(()=>{}); // ignore if browser still blocks it
+      btn.textContent = '🔊';
+      return;
+    }
+
+    ensureAudio();
+    musicOn = true;
+    btn.textContent = '🔊';
+    melodyStep = 0;
+    scheduleMusicStep();
+  }
+
   function toggleSound(){
     const btn = document.getElementById('soundToggle');
     const songEl = document.getElementById('songPlayer');
 
     if(SONG_URL){
-      // A real song file was provided (must be one you legally own/host) — play/pause it directly
       if(songEl.paused){
         songEl.play();
         btn.textContent = '🔊';
@@ -733,7 +776,6 @@
       return;
     }
 
-    // No custom song provided — fall back to the original music-box loop
     ensureAudio();
     musicOn = !musicOn;
     if(musicOn){
