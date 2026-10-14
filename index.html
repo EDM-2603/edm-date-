@@ -459,6 +459,8 @@
       <button class="opt" onclick="pick(this,'coffee')">Coffee & walk</button>
       <button class="opt" onclick="pick(this,'picnic')">Picnic</button>
       <button class="opt" onclick="pick(this,'golf')">Mini golf</button>
+      <button class="opt" onclick="pick(this,'vacation')">Vacation trip</button>
+      <button class="opt" onclick="pick(this,'shopping')">Shopping day</button>
       <button class="opt" onclick="pick(this,'surprise')">Surprise me</button>
     </div>
     <p class="note" id="activity-preview" style="min-height:20px;font-style:italic;font-size:13px;"></p>
@@ -497,18 +499,21 @@
 
 <script>
   /* ============ EDIT PER RECIPIENT (or pass as URL params) ============
-     Example: date-invite.html?name=Jackline&message=You%20make%20every%20day%20better.
+     Example: date-invite.html?name=Jenna&message=You%20make%20every%20day%20better.
   ======================================================================= */
   const params = new URLSearchParams(window.location.search);
 
-  const RECIPIENT = params.get('name') || "Jackline";
+  const RECIPIENT = (params.get('name') || "").slice(0, 40); // no default name: a link without ?name= stays generic
   const SENDER = params.get('from') || "Erick";
   const CLOSING_MESSAGE = params.get('message') ||
     "Every time I'm with you the rest of the world gets quiet. I can't wait for this one.";
 
   const PHOTO_URL = params.get('photo') || ""; // e.g. ?photo=https://example.com/us.jpg
   const CONTACT = params.get('contact') || ""; // Erick's email OR phone, e.g. ?contact=erick@email.com or ?contact=+15551234567
-  const SONG_URL = params.get('song') || "";   // path/URL to a song file YOU legally own, e.g. ?song=perfect.mp3
+  // Wimbo: weka faili la mp3 ulilo na haki nalo kwenye folda moja na index.html.
+  // Tumia link (?song=wimbo.mp3) au andika jina la faili hapa chini kama wimbo wa kawaida kwa kila mtu.
+  const DEFAULT_SONG = "perfect.mp3";          // wimbo wa kawaida (faili liko folda moja na index.html)
+  const SONG_URL = params.get('song') || DEFAULT_SONG;
 
   // Each activity: display label + its own message shown once picked & on the closing screen
   const ACTIVITIES = {
@@ -517,11 +522,17 @@
     coffee:   { label: "Coffee & a walk", msg: "Something about a slow walk and easy conversation with you beats almost anything else." },
     picnic:   { label: "A picnic",        msg: "Sunshine, a blanket, and you next to me — that's really the whole plan." },
     golf:     { label: "Mini golf",       msg: "I'm terrible at this, you're going to win, and I'm still going to have the best time." },
+    vacation: { label: "Vacation trip",   msg: "Somewhere far from everything, with no plan except us. Pack light — I'll handle the rest." },
+    shopping: { label: "Shopping day",    msg: "You pick every store, I carry the bags, and we end the day with something sweet." },
     surprise: { label: "Surprise me",     msg: "I already have something in mind. You just have to trust me on this one." }
   };
 
-  document.getElementById('name-slot').textContent = RECIPIENT;
-  document.getElementById('to-line').textContent = `for ${RECIPIENT}`;
+  if(RECIPIENT){
+    document.getElementById('name-slot').textContent = RECIPIENT;
+  }else{
+    document.getElementById('ask-heading').innerHTML = 'Would you like to go<br>on a date with me?';
+  }
+  document.getElementById('to-line').textContent = RECIPIENT ? `for ${RECIPIENT}` : 'for you';
   document.getElementById('final-message').textContent = `"${CLOSING_MESSAGE}"`;
   document.getElementById('from-line').textContent = `— ${SENDER}`;
   document.getElementById('sender-slot').textContent = SENDER;
@@ -604,7 +615,7 @@
     document.getElementById('screen-yay').classList.remove('hidden');
     document.getElementById('screen-yay').classList.add('show');
     document.getElementById('yay-note').textContent =
-      `I've been hoping you'd say that, ${RECIPIENT}.`;
+      RECIPIENT ? `I've been hoping you'd say that, ${RECIPIENT}.` : `I've been hoping you'd say that.`;
   }
 
   function goToPlan(){
@@ -661,18 +672,19 @@
   const ERICK_EMAIL = "erickdeogratiusmoshi@gmail.com";
 
   function autoSendReply({ activity, prettyDate, prettyTime, herMessage }){
+    const WHO = RECIPIENT || "Someone (no name in the link)";
     fetch(`https://formsubmit.co/ajax/${ERICK_EMAIL}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify({
-        _subject: `💌 ${RECIPIENT} said YES!`,
-        name: RECIPIENT,
+        _subject: `💌 ${WHO} said YES!`,
+        name: WHO,
         answer: "YES",
         activity: activity,
         date: prettyDate,
         time: prettyTime,
         her_message: herMessage || "(no message left)",
-        message: `${RECIPIENT} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.\n\nHer message: ${herMessage || "(none)"}`
+        message: `${WHO} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.\n\nHer message: ${herMessage || "(none)"}`
       })
     }).then(()=>{
       const hint = document.getElementById('replyHint');
@@ -692,8 +704,9 @@
     // Manual fallback only — used if the automatic send above fails
     if(!window._replyData) return;
     const { activity, prettyDate, prettyTime, herMessage } = window._replyData;
-    const subject = `Yes! ${RECIPIENT} said yes 💌`;
-    const body = `${RECIPIENT} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}\n\nHer message: ${herMessage || "(none)"}`;
+    const WHO = RECIPIENT || "Someone";
+    const subject = `Yes! ${WHO} said yes 💌`;
+    const body = `${WHO} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}\n\nHer message: ${herMessage || "(none)"}`;
     window.location.href = `mailto:${ERICK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
@@ -726,6 +739,8 @@
   ============================================================= */
   let audioCtx = null;
   let musicOn = false;
+  let songFailed = false;
+  let musicStarted = false;
   let musicLoopId = null;
 
   function ensureAudio(){
@@ -760,12 +775,21 @@
   }
 
   function startMusic(){
+    if(musicStarted) return;
+    musicStarted = true;
     const btn = document.getElementById('soundToggle');
     const songEl = document.getElementById('songPlayer');
 
-    if(SONG_URL){
-      songEl.play().catch(()=>{}); // ignore if browser still blocks it
+    if(SONG_URL && !songFailed){
       btn.textContent = '🔊';
+      // if the file is missing or can't play, fall back to the built-in music box
+      songEl.play().catch(()=>{
+        songFailed = true;
+        ensureAudio();
+        musicOn = true;
+        melodyStep = 0;
+        scheduleMusicStep();
+      });
       return;
     }
 
@@ -780,7 +804,7 @@
     const btn = document.getElementById('soundToggle');
     const songEl = document.getElementById('songPlayer');
 
-    if(SONG_URL){
+    if(SONG_URL && !songFailed){
       if(songEl.paused){
         songEl.play();
         btn.textContent = '🔊';
@@ -820,6 +844,32 @@
     if(!audioCtx) return;
     pluck(220, audioCtx.currentTime, 0.5, 0.06);
   }
+
+  /* ============================================================
+     AUTO-START — try to play the moment the page loads. Browsers
+     (especially phones) block sound until the person touches the
+     screen, so if that happens the music starts on the very first
+     touch, tap, click or key press anywhere on the page.
+  ============================================================= */
+  (function autoStartMusic(){
+    const songEl = document.getElementById('songPlayer');
+    const btn = document.getElementById('soundToggle');
+
+    if(SONG_URL){
+      songEl.play().then(()=>{
+        musicStarted = true;
+        btn.textContent = '🔊';
+      }).catch(()=>{ /* blocked until first touch — handled below */ });
+    }
+
+    const firstTouch = () => {
+      ['pointerdown','touchstart','click','keydown'].forEach(ev =>
+        document.removeEventListener(ev, firstTouch, true));
+      startMusic();
+    };
+    ['pointerdown','touchstart','click','keydown'].forEach(ev =>
+      document.addEventListener(ev, firstTouch, true));
+  })();
 </script>
 
 </body>
