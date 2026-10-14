@@ -402,6 +402,7 @@
 <button class="sound-toggle" id="soundToggle" onclick="toggleSound()" aria-label="Toggle music">🔇</button>
 <button class="sound-toggle" id="nextTrack" onclick="nextTrack()" aria-label="Next song" style="top:68px;display:none;">⏭</button>
 <audio id="songPlayer"></audio>
+<div id="toast" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);max-width:90vw;background:rgba(0,0,0,.75);color:#fff;padding:9px 16px;border-radius:16px;font-size:12.5px;z-index:20;display:none;text-align:center;"></div>
 
 <div class="stage">
 
@@ -774,8 +775,24 @@
     const songEl = document.getElementById('songPlayer');
     trackIndex = (trackIndex + 1) % PLAYLIST.length;
     songEl.src = PLAYLIST[trackIndex];
-    songEl.play().catch(()=>{});
-    document.getElementById('soundToggle').textContent = '🔊';
+    songFailed = false;
+    musicOn = false;                     // make sure the built-in music box is not playing underneath
+    clearTimeout(musicLoopId);
+    songEl.play().then(()=>{
+      document.getElementById('soundToggle').textContent = '🔊';
+    }).catch((err)=>{
+      if(err && err.name === 'AbortError') return;
+      showToast("Couldn't play “" + PLAYLIST[trackIndex] + "” — is the file uploaded?");
+    });
+  }
+
+  let toastTimer = null;
+  function showToast(msg){
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ el.style.display = 'none'; }, 4500);
   }
   document.getElementById('songPlayer').addEventListener('ended', ()=>{
     const songEl = document.getElementById('songPlayer');
@@ -850,7 +867,8 @@
     if(SONG_URL && !songFailed){
       btn.textContent = '🔊';
       // if the file is missing or can't play, fall back to the built-in music box
-      songEl.play().catch(()=>{
+      songEl.play().catch((err)=>{
+        if(err && err.name === 'AbortError') return; // interrupted by "next song" — not a real failure
         songFailed = true;
         ensureAudio();
         musicOn = true;
