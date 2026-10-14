@@ -526,7 +526,7 @@
   const CONTACT = params.get('contact') || ""; // Erick's email OR phone, e.g. ?contact=erick@email.com or ?contact=+15551234567
   // Wimbo: weka faili la mp3 ulilo na haki nalo kwenye folda moja na index.html.
   // Tumia link (?song=wimbo.mp3) au andika jina la faili hapa chini kama wimbo wa kawaida kwa kila mtu.
-  const DEFAULT_SONGS = ["perfect.mp3", "Thami - I Love You.mp3"].map(encodeURI); // majina lazima yafanane na faili kwenye GitHub (herufi kubwa/ndogo na nafasi)
+  const DEFAULT_SONGS = ["perfect.mp3", "i-love-you.mp3"]; // majina lazima yafanane na faili kwenye GitHub (herufi ndogo, bila nafasi)
   const PLAYLIST = params.get('song') ? [params.get('song')] : DEFAULT_SONGS; // ?song=... inacheza wimbo mmoja tu
   let trackIndex = 0;
   const SONG_URL = PLAYLIST[0];
@@ -780,9 +780,17 @@
     clearTimeout(musicLoopId);
     songEl.play().then(()=>{
       document.getElementById('soundToggle').textContent = '🔊';
-    }).catch((err)=>{
+    }).catch(async (err)=>{
       if(err && err.name === 'AbortError') return;
-      showToast("Couldn't play “" + PLAYLIST[trackIndex] + "” — is the file uploaded?");
+      // find out WHY: ask the server whether the file exists
+      let why = (err && err.name) ? err.name : 'error';
+      try{
+        const r = await fetch(songEl.src, { method: 'HEAD' });
+        why += ' · HTTP ' + r.status;
+      }catch(e){ why += ' · network'; }
+      let shown = PLAYLIST[trackIndex];
+      try{ shown = decodeURIComponent(shown); }catch(e){}
+      showToast("Couldn't play “" + shown + "” (" + why + ")");
     });
   }
 
