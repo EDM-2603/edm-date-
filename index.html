@@ -526,7 +526,7 @@
   const CONTACT = params.get('contact') || ""; // Erick's email OR phone, e.g. ?contact=erick@email.com or ?contact=+15551234567
   // Wimbo: weka faili la mp3 ulilo na haki nalo kwenye folda moja na index.html.
   // Tumia link (?song=wimbo.mp3) au andika jina la faili hapa chini kama wimbo wa kawaida kwa kila mtu.
-  const DEFAULT_SONGS = ["perfect.mp3", "i-love-you.mp3"]; // nyimbo za kawaida, zinachezwa moja baada ya nyingine
+  const DEFAULT_SONGS = ["perfect.mp3", "Thami - I Love You.mp3"].map(encodeURI); // majina lazima yafanane na faili kwenye GitHub (herufi kubwa/ndogo na nafasi)
   const PLAYLIST = params.get('song') ? [params.get('song')] : DEFAULT_SONGS; // ?song=... inacheza wimbo mmoja tu
   let trackIndex = 0;
   const SONG_URL = PLAYLIST[0];
