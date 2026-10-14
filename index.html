@@ -272,7 +272,7 @@
     color:var(--rose-deep);
     margin-bottom:6px;
   }
-  input[type="date"], input[type="time"], textarea{
+  input[type="date"], input[type="time"], input[type="text"], input[type="email"], textarea{
     width:100%;
     padding:10px 12px;
     border:1.5px solid var(--rose-deep);
@@ -400,7 +400,8 @@
 <div class="stars" id="stars"></div>
 
 <button class="sound-toggle" id="soundToggle" onclick="toggleSound()" aria-label="Toggle music">🔇</button>
-<audio id="songPlayer" loop></audio>
+<button class="sound-toggle" id="nextTrack" onclick="nextTrack()" aria-label="Next song" style="top:68px;display:none;">⏭</button>
+<audio id="songPlayer"></audio>
 
 <div class="stage">
 
@@ -470,6 +471,18 @@
       <textarea id="herMessage" placeholder="Say something back..."></textarea>
     </div>
 
+    <div class="field-group">
+      <label for="emailInput">Your email (optional — so <span id="sender-slot-3"></span> can reply)</label>
+      <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" oninput="checkReady()">
+    </div>
+
+    <div class="field-group">
+      <label for="songWish">A song for our date (optional)</label>
+      <input type="text" id="songWish" placeholder="Song name, artist or link" maxlength="200">
+      <button type="button" class="opt" style="margin-top:8px;width:100%;" onclick="document.getElementById('mySongFile').click()">🎵 Play a song from my phone</button>
+      <input type="file" id="mySongFile" accept="audio/*" class="hidden" onchange="playMyOwnSong(this)">
+    </div>
+
     <button class="lock-btn" id="lockBtn" disabled onclick="lockIn()">Lock it in</button>
   </div>
 
@@ -512,8 +525,10 @@
   const CONTACT = params.get('contact') || ""; // Erick's email OR phone, e.g. ?contact=erick@email.com or ?contact=+15551234567
   // Wimbo: weka faili la mp3 ulilo na haki nalo kwenye folda moja na index.html.
   // Tumia link (?song=wimbo.mp3) au andika jina la faili hapa chini kama wimbo wa kawaida kwa kila mtu.
-  const DEFAULT_SONG = "perfect.mp3";          // wimbo wa kawaida (faili liko folda moja na index.html)
-  const SONG_URL = params.get('song') || DEFAULT_SONG;
+  const DEFAULT_SONGS = ["perfect.mp3", "i-love-you.mp3"]; // nyimbo za kawaida, zinachezwa moja baada ya nyingine
+  const PLAYLIST = params.get('song') ? [params.get('song')] : DEFAULT_SONGS; // ?song=... inacheza wimbo mmoja tu
+  let trackIndex = 0;
+  const SONG_URL = PLAYLIST[0];
 
   // Each activity: display label + its own message shown once picked & on the closing screen
   const ACTIVITIES = {
@@ -537,6 +552,7 @@
   document.getElementById('from-line').textContent = `— ${SENDER}`;
   document.getElementById('sender-slot').textContent = SENDER;
   document.getElementById('sender-slot-2').textContent = SENDER;
+  document.getElementById('sender-slot-3').textContent = SENDER;
 
   if(PHOTO_URL){
     ['photoFrameYay','photoFrameFinal'].forEach(id=>{
@@ -636,7 +652,9 @@
   function checkReady(){
     const d = document.getElementById('dateInput').value;
     const t = document.getElementById('timeInput').value;
-    document.getElementById('lockBtn').disabled = !(d && t && chosenKey);
+    const emailEl = document.getElementById('emailInput');
+    const emailOk = !emailEl.value.trim() || emailEl.validity.valid; // empty is fine, but a typo isn't
+    document.getElementById('lockBtn').disabled = !(d && t && chosenKey && emailOk);
   }
 
   function lockIn(){
@@ -658,9 +676,13 @@
 
     const herMessage = document.getElementById('herMessage').value.trim();
 
+    const emailEl = document.getElementById('emailInput');
+    const email = (emailEl.value.trim() && emailEl.validity.valid) ? emailEl.value.trim() : "";
+    const songWish = document.getElementById('songWish').value.trim();
+
     autoSendReply({
       activity: ACTIVITIES[chosenKey].label,
-      prettyDate, prettyTime, herMessage
+      prettyDate, prettyTime, herMessage, email, songWish
     });
   }
 
@@ -671,7 +693,7 @@
   ============================================================= */
   const ERICK_EMAIL = "erickdeogratiusmoshi@gmail.com";
 
-  function autoSendReply({ activity, prettyDate, prettyTime, herMessage }){
+  function autoSendReply({ activity, prettyDate, prettyTime, herMessage, email, songWish }){
     const WHO = RECIPIENT || "Someone (no name in the link)";
     fetch(`https://formsubmit.co/ajax/${ERICK_EMAIL}`, {
       method: "POST",
@@ -684,7 +706,10 @@
         date: prettyDate,
         time: prettyTime,
         her_message: herMessage || "(no message left)",
-        message: `${WHO} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.\n\nHer message: ${herMessage || "(none)"}`
+        her_email: email || "(not given)",
+        song_wish: songWish || "(none)",
+        ...(email ? { email: email, _replyto: email } : {}), // lets you hit Reply and write straight to her
+        message: `${WHO} said yes and picked "${activity}" for ${prettyDate} at ${prettyTime}.\n\nHer message: ${herMessage || "(none)"}\n\nHer email: ${email || "(not given)"}\nSong she'd like: ${songWish || "(none)"}`
       })
     }).then(()=>{
       const hint = document.getElementById('replyHint');
@@ -695,7 +720,7 @@
       const btn = document.getElementById('replyBtn');
       if(btn){
         btn.style.display = 'block';
-        window._replyData = { activity, prettyDate, prettyTime, herMessage };
+        window._replyData = { activity, prettyDate, prettyTime, herMessage, email, songWish };
       }
     });
   }
@@ -703,10 +728,10 @@
   function sendReply(){
     // Manual fallback only — used if the automatic send above fails
     if(!window._replyData) return;
-    const { activity, prettyDate, prettyTime, herMessage } = window._replyData;
+    const { activity, prettyDate, prettyTime, herMessage, email, songWish } = window._replyData;
     const WHO = RECIPIENT || "Someone";
     const subject = `Yes! ${WHO} said yes 💌`;
-    const body = `${WHO} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}\n\nHer message: ${herMessage || "(none)"}`;
+    const body = `${WHO} said YES and picked: ${activity}\n${prettyDate} at ${prettyTime}\n\nHer message: ${herMessage || "(none)"}\nHer email: ${email || "(not given)"}\nSong she'd like: ${songWish || "(none)"}`;
     window.location.href = `mailto:${ERICK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
@@ -741,6 +766,48 @@
   let musicOn = false;
   let songFailed = false;
   let musicStarted = false;
+  let usingOwnSong = false;
+
+  // Playlist: when one song ends, the next one starts; after the last, it starts over.
+  function nextTrack(){
+    if(usingOwnSong || PLAYLIST.length < 2) return;
+    const songEl = document.getElementById('songPlayer');
+    trackIndex = (trackIndex + 1) % PLAYLIST.length;
+    songEl.src = PLAYLIST[trackIndex];
+    songEl.play().catch(()=>{});
+    document.getElementById('soundToggle').textContent = '🔊';
+  }
+  document.getElementById('songPlayer').addEventListener('ended', ()=>{
+    const songEl = document.getElementById('songPlayer');
+    if(usingOwnSong || PLAYLIST.length < 2){
+      songEl.currentTime = 0;
+      songEl.play().catch(()=>{});
+    }else{
+      nextTrack();
+    }
+  });
+  if(PLAYLIST.length > 1){
+    document.getElementById('nextTrack').style.display = 'flex';
+  }
+
+  // She can play a song from her own phone. It plays only on her device — nothing is uploaded or stored.
+  function playMyOwnSong(input){
+    const file = input.files && input.files[0];
+    if(!file) return;
+    const songEl = document.getElementById('songPlayer');
+    const btn = document.getElementById('soundToggle');
+    clearTimeout(musicLoopId);          // stop the built-in music box if it was playing
+    musicOn = false;
+    if(songEl.dataset.mine) URL.revokeObjectURL(songEl.dataset.mine);
+    const url = URL.createObjectURL(file);
+    songEl.dataset.mine = url;
+    songEl.src = url;
+    usingOwnSong = true;
+    document.getElementById('nextTrack').style.display = 'none';
+    songFailed = false;
+    musicStarted = true;
+    songEl.play().then(()=>{ btn.textContent = '🔊'; }).catch(()=>{ btn.textContent = '🔇'; });
+  }
   let musicLoopId = null;
 
   function ensureAudio(){
@@ -804,7 +871,7 @@
     const btn = document.getElementById('soundToggle');
     const songEl = document.getElementById('songPlayer');
 
-    if(SONG_URL && !songFailed){
+    if((SONG_URL || usingOwnSong) && !songFailed){
       if(songEl.paused){
         songEl.play();
         btn.textContent = '🔊';
